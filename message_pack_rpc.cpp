@@ -1,5 +1,5 @@
 /*************************************************************************/
-/*  register_types.cpp                                                   */
+/*  message_pack.cpp                                                     */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
@@ -28,22 +28,55 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#include "register_types.h"
-#include "core/object/class_db.h"
-#include "message_pack.h"
 #include "message_pack_rpc.h"
+#include "core/os/memory.h"
+#include "message_pack.h"
 
-void initialize_message_pack_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-
-	GDREGISTER_CLASS(MessagePack);
-	GDREGISTER_CLASS(MessagePackRPC);
+PackedByteArray MessagePackRPC::make_request(int p_msgid, const String &p_method, const Variant &p_params) {
+	Array msg;
+	ERR_FAIL_COND_V(msg.resize(4) != OK, PackedByteArray());
+	msg[0] = 0;
+	msg[1] = p_msgid;
+	msg[2] = p_method;
+	msg[3] = p_params;
+	Array pack = MessagePack::pack(msg);
+	ERR_FAIL_COND_V_MSG(int(pack[0]) != OK, PackedByteArray(), String("Some error occurred while packing request:") + String(pack[1]));
+	return pack[1];
 }
 
-void uninitialize_message_pack_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
+PackedByteArray MessagePackRPC::make_response(int p_msgid, const Variant &p_result, const Variant &p_error) {
+	Array msg;
+	ERR_FAIL_COND_V(msg.resize(4) != OK, PackedByteArray());
+	msg[0] = 1;
+	msg[1] = p_msgid;
+	msg[2] = p_error;
+	msg[3] = p_result;
+	Array pack = MessagePack::pack(msg);
+	ERR_FAIL_COND_V_MSG(int(pack[0]) != OK, PackedByteArray(), String("Some error occurred while packing response:") + String(pack[1]));
+	return pack[1];
+}
+
+PackedByteArray MessagePackRPC::make_notification(const String &p_method, const Variant &p_params) {
+	Array msg;
+	ERR_FAIL_COND_V(msg.resize(3) != OK, PackedByteArray());
+	msg[0] = 2;
+	msg[1] = p_method;
+	msg[2] = p_params;
+	Array pack = MessagePack::pack(msg);
+	ERR_FAIL_COND_V_MSG(int(pack[0]) != OK, PackedByteArray(), String("Some error occurred while packing response:") + String(pack[1]));
+	return pack[1];
+}
+
+MessagePackRPC::MessagePackRPC() {
+}
+
+MessagePackRPC::~MessagePackRPC() {
+}
+
+void MessagePackRPC::_bind_methods() {
+	// ClassDB::bind_static_method("MessagePackRPC", D_METHOD("unpack", "msg_buf"), &MessagePackRPC::unpack);
+	// ClassDB::bind_static_method("MessagePackRPC", D_METHOD("pack", "data"), &MessagePackRPC::pack);
+
+	ClassDB::bind_method(D_METHOD("make_request", "msg_id", "method", "params"), &MessagePackRPC::make_request);
+	ClassDB::bind_method(D_METHOD("make_response", "msg_id", "result", "error"), &MessagePackRPC::make_response, DEFVAL(Variant()));
 }

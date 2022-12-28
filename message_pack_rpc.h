@@ -1,5 +1,5 @@
 /*************************************************************************/
-/*  register_types.cpp                                                   */
+/*  message_pack_rpc.h                                                       */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
@@ -28,22 +28,29 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#include "register_types.h"
-#include "core/object/class_db.h"
-#include "message_pack.h"
-#include "message_pack_rpc.h"
+#ifndef MESSAGE_PACK_RPC_H
+#define MESSAGE_PACK_RPC_H
 
-void initialize_message_pack_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
+#include "core/object/ref_counted.h"
+#include "core/string/ustring.h"
+#include "core/templates/vector.h"
+#include "core/variant/array.h"
+#include "core/variant/dictionary.h"
+#include "core/variant/typed_array.h"
 
-	GDREGISTER_CLASS(MessagePack);
-	GDREGISTER_CLASS(MessagePackRPC);
-}
+class MessagePackRPC : public Object {
+	GDCLASS(MessagePackRPC, Object);
 
-void uninitialize_message_pack_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-}
+protected:
+	static void _bind_methods();
+
+public:
+	PackedByteArray make_request(int p_msgid, const String &p_method, const Variant &p_params);
+	PackedByteArray make_response(int p_msgid, const Variant &p_result, const Variant &p_error = Variant());
+	PackedByteArray make_notification(const String &p_method, const Variant &p_params);
+
+	MessagePackRPC();
+	~MessagePackRPC();
+};
+
+#endif // MESSAGE_PACK_RPC_H
