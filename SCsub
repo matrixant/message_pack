@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+Import("env")
+Import("env_modules")
+
+env_msgpack = env_modules.Clone()
+
+# Thirdparty source files
+
+mpack_dir = "mpack/src/"
+mpack_obj = []
+mpack_flags = []
+mpack_sources = [
+    "mpack/mpack-common.c",
+    "mpack/mpack-expect.c",
+    "mpack/mpack-node.c",
+    "mpack/mpack-platform.c",
+    "mpack/mpack-reader.c",
+    "mpack/mpack-writer.c",
+]
+
+mpack_sources = [mpack_dir + file for file in mpack_sources]
+
+env_msgpack.Prepend(CPPPATH=[mpack_dir])
+env_msgpack.Append(CPPDEFINES=mpack_flags)
+
+env_mpack = env_msgpack.Clone()
+env_mpack.disable_warnings()
+# env_mpack["OBJSUFFIX"] = "_" + width + env_mpack["OBJSUFFIX"]
+env_mpack.Append(CPPDEFINES=mpack_flags)
+env_mpack.add_source_files(mpack_obj, mpack_sources)
+env.modules_sources += mpack_obj
+
+# Godot source files
+
+module_obj = []
+
+env_msgpack.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+# Needed to force rebuilding the module files when the mpack library is updated.
+env.Depends(module_obj, mpack_obj)
