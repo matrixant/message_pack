@@ -41,63 +41,48 @@
 
 #include "mpack/mpack.h"
 
-#if MPACK_EXTENSIONS
-struct ExtInfo {
-	int type_id;
-	String type_name;
-	Callable pack_func;
-	Callable unpack_func;
-};
-#endif
+// Limit the depth of recursive functions
+#define _RECURSION_MAX_DEPTH 32
+// Default maximum message size in bytes
+#define _MSG_MAX_SIZE (16 * 1024 * 1024)
+// Default maximum node size
+#define _NODE_MAX_SIZE (1024 * 1024)
+// String length limit
+#define _STR_MAX_SIZE (1024 * 1024)
+// Binary data size limit in bytes
+#define _BIN_MAX_SIZE (1024 * 1024)
 
-class MessagePack : public RefCounted {
-	GDCLASS(MessagePack, RefCounted);
+class MessagePack : public Object {
+	GDCLASS(MessagePack, Object);
 
 	Variant data;
-	String err_str;
-	int remaining = 0;
+	String err_msg;
 
 	mpack_tree_t tree;
 	Callable stream_reader;
 
-#if MPACK_EXTENSIONS
-	// TODO: support ext type
-	Vector<ExtInfo> ext_list;
-#endif
+	static Variant _read_recursive(mpack_reader_t &p_reader, int p_depth);
+	static void _write_recursive(mpack_writer_t &p_writer, Variant p_val, int p_depth);
+	Variant _parse_node_recursive(mpack_node_t p_node, int p_depth);
 
-	static Variant _read_recursive(mpack_reader_t &reader, int depth);
-	static void _write_recursive(mpack_writer_t &writer, Variant val, int depth);
-	Variant _parse_node_recursive(mpack_node_t node, int depth);
-
-	static Error _got_error_or_not(mpack_error_t err, String &_err_str);
+	static Error _got_error_or_not(mpack_error_t p_err, String &r_err_str);
 
 protected:
 	static void _bind_methods();
-	static constexpr size_t MSG_MAX_SIZE = 16 * 1024 * 1024;
-	static constexpr size_t NODE_MAX_SIZE = 1024 * 1024;
-	static constexpr size_t STR_MAX_SIZE = 1024 * 1024;
-	static constexpr size_t BIN_MAX_SIZE = 1024 * 1024;
 
 public:
-	static Array unpack(const PackedByteArray &msg_buf);
-	static Array pack(const Variant &val);
+	static Array decode(const PackedByteArray &p_msg_buf);
+	static Array encode(const Variant &p_val);
 
-	Error init_stream_reader(Callable stream_reader,
-			size_t msgs_max = MSG_MAX_SIZE,
-			size_t nodes_max = NODE_MAX_SIZE);
+	static size_t _read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
+	Error start_stream(const Callable &r_stream_reader, int p_msgs_max = _MSG_MAX_SIZE);
 	Error update_stream();
-	Error reset_stream(size_t msgs_max = MSG_MAX_SIZE,
-			size_t nodes_max = NODE_MAX_SIZE);
-	PackedByteArray _get_stream_data(size_t len);
-
-#if MPACK_EXTENSIONS
-	// TODO: support ext type
-	Error register_ext_type(int type_id, String &type_name, Callable pack_func, Callable unpack_func);
-#endif
+	Error reset_stream(int p_msgs_max = _MSG_MAX_SIZE);
+	PackedByteArray _get_stream_data(int p_len);
 
 	inline Variant get_data() const { return data; }
-	inline int get_bytes_remaining() const { return remaining; }
-	inline String get_error_message() const { return err_str; }
+	inline int get_bytes_remaining() const { return tree.data_length; }
+	inline String get_error_message() const { return err_msg; }
 
 	MessagePack();
 	~MessagePack();

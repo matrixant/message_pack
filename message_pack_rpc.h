@@ -32,6 +32,8 @@
 #define MESSAGE_PACK_RPC_H
 
 #include "core/object/ref_counted.h"
+#include "core/os/mutex.h"
+#include "core/os/thread.h"
 #include "core/string/ustring.h"
 #include "core/templates/vector.h"
 #include "core/variant/array.h"
@@ -45,9 +47,17 @@ protected:
 	static void _bind_methods();
 
 public:
-	PackedByteArray make_request(int p_msgid, const String &p_method, const Variant &p_params);
-	PackedByteArray make_response(int p_msgid, const Variant &p_result, const Variant &p_error = Variant());
-	PackedByteArray make_notification(const String &p_method, const Variant &p_params);
+	static PackedByteArray make_request(int p_msgid, const String &p_method, const Array &p_params = Array());
+	static PackedByteArray make_response(int p_msgid, const Variant &p_result, const Variant &p_error = Array());
+	static PackedByteArray make_notification(const String &p_method, const Array &p_params = Array());
+
+	Error connect_to(const String &p_address);
+	Error poll();
+
+	Variant sync_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
+	Variant sync_callv(const String &p_method, const Array &p_params = Array());
+	Error async_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
+	Error async_callv(const String &p_method, const Callable &p_return_call, const Array &p_params = Array());
 
 	MessagePackRPC();
 	~MessagePackRPC();
