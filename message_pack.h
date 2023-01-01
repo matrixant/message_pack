@@ -43,42 +43,44 @@
 
 // Limit the depth of recursive functions
 #define _RECURSION_MAX_DEPTH 32
-// Default maximum message size in bytes
-#define _MSG_MAX_SIZE (16 * 1024 * 1024)
+// Default maximum message size in bytes: 8MB
+#define _MSG_MAX_SIZE (1 << 23)
 // Default maximum node size
-#define _NODE_MAX_SIZE (1024 * 1024)
-// String length limit
-#define _STR_MAX_SIZE (1024 * 1024)
-// Binary data size limit in bytes
-#define _BIN_MAX_SIZE (1024 * 1024)
+#define _NODE_MAX_SIZE (1 << 20)
+// String length limit: 1MB
+#define _STR_MAX_SIZE (1 << 20)
+// Binary data size limit in bytes: 1MB
+#define _BIN_MAX_SIZE (1 << 20)
 
 class MessagePack : public Object {
 	GDCLASS(MessagePack, Object);
 
-	Variant data;
-	String err_msg;
-
-	mpack_tree_t tree;
-	Callable stream_reader;
-
 	static Variant _read_recursive(mpack_reader_t &p_reader, int p_depth);
 	static void _write_recursive(mpack_writer_t &p_writer, Variant p_val, int p_depth);
-	Variant _parse_node_recursive(mpack_node_t p_node, int p_depth);
-
-	static Error _got_error_or_not(mpack_error_t p_err, String &r_err_str);
 
 protected:
 	static void _bind_methods();
+
+	Variant data;
+	String err_msg;
+	mpack_tree_t tree;
+	bool started = false;
+
+	Callable stream_reader;
+
+	static Error _got_error_or_not(mpack_error_t p_err, String &r_err_str);
+	Variant _parse_node_recursive(mpack_node_t p_node, int p_depth);
+
+	static size_t _read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
 
 public:
 	static Array decode(const PackedByteArray &p_msg_buf);
 	static Array encode(const Variant &p_val);
 
-	static size_t _read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
 	Error start_stream(const Callable &r_stream_reader, int p_msgs_max = _MSG_MAX_SIZE);
 	Error update_stream();
 	Error reset_stream(int p_msgs_max = _MSG_MAX_SIZE);
-	PackedByteArray _get_stream_data(int p_len);
+	virtual PackedByteArray _get_stream_data(int p_len);
 
 	inline Variant get_data() const { return data; }
 	inline int get_bytes_remaining() const { return tree.data_length; }

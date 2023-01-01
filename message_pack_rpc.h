@@ -1,5 +1,5 @@
 /*************************************************************************/
-/*  message_pack_rpc.h                                                       */
+/*  message_pack_rpc.h                                                   */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
@@ -31,6 +31,8 @@
 #ifndef MESSAGE_PACK_RPC_H
 #define MESSAGE_PACK_RPC_H
 
+#include "core/io/file_access.h"
+#include "core/io/stream_peer_tcp.h"
 #include "core/object/ref_counted.h"
 #include "core/os/mutex.h"
 #include "core/os/thread.h"
@@ -40,24 +42,77 @@
 #include "core/variant/dictionary.h"
 #include "core/variant/typed_array.h"
 
-class MessagePackRPC : public Object {
-	GDCLASS(MessagePackRPC, Object);
+#include "message_pack.h"
+
+// Max message buf size: 8MiB, should be way more than enough.
+#define _MSG_BUF_MAX_SIZE (1 << 23)
+// Max message queue size
+#define _MSG_QUEUE_MAX_SIZE 2048
+
+class MessagePackRPC : public MessagePack {
+	GDCLASS(MessagePackRPC, MessagePack);
+
+	enum ChannelType {
+		NONE = 0,
+		PIPE,
+		TCP
+	};
+
+	Mutex mutex;
+	Thread thread;
+	ChannelType channel = NONE;
+	bool running = false;
+	bool connected = false;
+	uint64_t poll_interval = 1000;
+	Ref<StreamPeerTCP> tcp_peer;
+	Ref<FileAccess> named_pipe;
+
+	List<Array> in_queue;
+	List<Array> out_queue;
+	PackedByteArray out_buf;
+	int out_tail = 0;
+	int out_head = 0;
+	PackedByteArray in_buf;
+	int in_tail = 0;
+	int in_head = 0;
+
+	uint64_t msgid = 0;
+
+	typedef size_t (*Callback)(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
+
+	Error _tcp_try_connect(const String &p_ip, int p_port);
+	Error start_stream(Callback callback, int p_msgs_max = _MSG_MAX_SIZE);
+	Error update_stream();
+	void _tcp_write_out();
+	void _tcp_read_in();
+	void _pipe_write_out();
+	void _pipe_read_in();
+	static size_t _read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
 
 protected:
 	static void _bind_methods();
 
 public:
+	static PackedByteArray make_message_buf(const Array &p_message);
 	static PackedByteArray make_request(int p_msgid, const String &p_method, const Array &p_params = Array());
 	static PackedByteArray make_response(int p_msgid, const Variant &p_result, const Variant &p_error = Array());
 	static PackedByteArray make_notification(const String &p_method, const Array &p_params = Array());
 
-	Error connect_to(const String &p_address);
-	Error poll();
+	Error connect_to(const String &p_address, bool p_big_endian = false, uint64_t p_poll_interval = 1000);
+	void close();
+	void poll();
+	static void _thread_func(void *p_user_data);
+	void _message_received(const Variant &p_message);
+
+	bool is_connected();
+	bool has_message();
+	Error put_message(const Array &p_msg);
+	Array get_message();
 
 	Variant sync_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	Variant sync_callv(const String &p_method, const Array &p_params = Array());
 	Error async_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
-	Error async_callv(const String &p_method, const Callable &p_return_call, const Array &p_params = Array());
+	Error async_callv(const String &p_method, const Array &p_params = Array());
 
 	MessagePackRPC();
 	~MessagePackRPC();

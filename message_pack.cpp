@@ -92,11 +92,8 @@ Variant MessagePack::_read_recursive(mpack_reader_t &p_reader, int p_depth) {
 			const char *buf = mpack_read_bytes_inplace(&p_reader, len);
 			if (mpack_reader_error(&p_reader) == mpack_ok) {
 				if (len > 0) {
-					if (bin_buf.resize(len) != OK) {
-						mpack_reader_flag_error(&p_reader, mpack_error_memory);
-					} else {
-						memcpy(bin_buf.ptrw(), buf, len);
-					}
+					bin_buf.resize(len);
+					memcpy(bin_buf.ptrw(), buf, len);
 				}
 			}
 			mpack_done_bin(&p_reader);
@@ -105,14 +102,13 @@ Variant MessagePack::_read_recursive(mpack_reader_t &p_reader, int p_depth) {
 		case mpack_type_array: {
 			Array arr;
 			uint32_t cnt = mpack_tag_array_count(&tag);
-			if (arr.resize(cnt) != OK) {
-				mpack_reader_flag_error(&p_reader, mpack_error_memory);
-				return arr;
-			}
-			for (uint32_t i = 0; i < cnt; i++) {
-				arr[i] = _read_recursive(p_reader, p_depth + 1);
-				if (mpack_reader_error(&p_reader) != mpack_ok) {
-					break;
+			if (cnt > 0) {
+				arr.resize(cnt);
+				for (uint32_t i = 0; i < cnt; i++) {
+					arr[i] = _read_recursive(p_reader, p_depth + 1);
+					if (mpack_reader_error(&p_reader) != mpack_ok) {
+						break;
+					}
 				}
 			}
 			mpack_done_array(&p_reader);
@@ -158,14 +154,14 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			mpack_write_int(&p_writer, p_val);
 			break;
 		case Variant::Type::FLOAT: {
-			double f = p_val;
-			//float range: -FLT_MAX ~ -FLT_MIN and FLT_MIN ~ FLT_MAX
-			if ((f > -FLT_MAX && f < -FLT_MIN) || (f > FLT_MIN && f < FLT_MAX)) {
-				// single precision float
-				mpack_write_float(&p_writer, p_val);
-			} else {
+			double d = p_val;
+			float f = d;
+			if (double(f) != d) {
 				// double precision float
 				mpack_write_double(&p_writer, p_val);
+			} else {
+				// single precision float
+				mpack_write_float(&p_writer, p_val);
 			}
 		} break;
 		case Variant::Type::STRING_NAME:
@@ -292,10 +288,8 @@ Variant MessagePack::_parse_node_recursive(mpack_node_t p_node, int p_depth) {
 		case mpack_type_bin: {
 			uint32_t len = mpack_node_bin_size(p_node);
 			PackedByteArray bin_buf;
-			if (bin_buf.resize(len) != OK) {
-				mpack_tree_flag_error(p_node.tree, mpack_error_too_big);
-				return bin_buf;
-			} else if (len > 0) {
+			if (len > 0) {
+				bin_buf.resize(len);
 				memcpy(bin_buf.ptrw(), mpack_node_bin_data(p_node), len);
 			}
 			return bin_buf;
@@ -303,9 +297,11 @@ Variant MessagePack::_parse_node_recursive(mpack_node_t p_node, int p_depth) {
 		case mpack_type_array: {
 			uint32_t len = mpack_node_array_length(p_node);
 			Array arr;
-			arr.resize(len);
-			for (uint32_t i = 0; i < len; i++) {
-				arr[i] = _parse_node_recursive(mpack_node_array_at(p_node, i), p_depth + 1);
+			if (len > 0) {
+				arr.resize(len);
+				for (uint32_t i = 0; i < len; i++) {
+					arr[i] = _parse_node_recursive(mpack_node_array_at(p_node, i), p_depth + 1);
+				}
 			}
 			return arr;
 		} break;
@@ -405,10 +401,8 @@ Array MessagePack::encode(const Variant &p_val) {
 	Error err = _got_error_or_not(mpack_writer_destroy(&writer), err_str);
 
 	PackedByteArray msg_buf;
-	if (msg_buf.resize(size) != OK) {
-		mpack_writer_flag_error(&writer, mpack_error_memory);
-		err = _got_error_or_not(mpack_error_memory, err_str);
-	} else if (size > 0) {
+	if (size > 0) {
+		msg_buf.resize(size);
 		memcpy(msg_buf.ptrw(), buf, size);
 	}
 
@@ -438,13 +432,12 @@ size_t MessagePack::_read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_
 }
 
 Error MessagePack::start_stream(const Callable &r_stream_reader, int p_msgs_max) {
-	ERR_FAIL_COND_V_MSG(r_stream_reader.is_null(),
-			ERR_METHOD_NOT_FOUND, String("An error occurred while call reader: ") + r_stream_reader.get_method());
-	err_msg = "";
+	ERR_FAIL_COND_V_MSG(!r_stream_reader.is_valid(),
+			ERR_METHOD_NOT_FOUND, "Stream reader is invalid, check and input a valid callable.");
 
 	this->stream_reader = r_stream_reader;
-	mpack_tree_init_stream(&tree, &_read_stream, this, p_msgs_max, _NODE_MAX_SIZE);
-	return OK;
+
+	return reset_stream();
 }
 
 Error MessagePack::update_stream() {
@@ -458,22 +451,27 @@ Error MessagePack::update_stream() {
 	// if true, got data.
 	mpack_node_t root = mpack_tree_root(&tree);
 	data = _parse_node_recursive(root, 0);
+
 	return OK;
 }
 
 Error MessagePack::reset_stream(int p_msgs_max) {
 	ERR_FAIL_COND_V_MSG(stream_reader.is_null(),
-			ERR_METHOD_NOT_FOUND, String("An error occurred while call: ") + stream_reader.get_method());
-	mpack_tree_destroy(&tree);
+			ERR_METHOD_NOT_FOUND, "Stream reader is invalid, call start_stream and input a valid callable.");
+	if (started) {
+		mpack_tree_destroy(&tree);
+	}
 	err_msg = "";
 
 	mpack_tree_init_stream(&tree, &_read_stream, this, p_msgs_max, _NODE_MAX_SIZE);
+
+	started = true;
 	return OK;
 }
 
 PackedByteArray MessagePack::_get_stream_data(int p_len) {
-	ERR_FAIL_COND_V_MSG(stream_reader.is_null(),
-			Variant(), "Stream reader is null, call init_stream_reader first.");
+	ERR_FAIL_COND_V_MSG(!stream_reader.is_valid(),
+			Variant(), "Stream reader is invalid, call start_stream and input a valid callable.");
 	const Variant param = p_len;
 	const Variant *param_ptr = &param;
 	Variant result;
@@ -491,7 +489,9 @@ MessagePack::MessagePack() {
 }
 
 MessagePack::~MessagePack() {
-	mpack_tree_destroy(&tree);
+	if (started) {
+		mpack_tree_destroy(&tree);
+	}
 }
 
 void MessagePack::_bind_methods() {
