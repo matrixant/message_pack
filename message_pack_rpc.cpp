@@ -102,11 +102,11 @@ Error MessagePackRPC::_message_handle(const Variant &p_message) {
 		}
 
 		switch (int(msg_arr[0])) {
-			case 0: // Request
+			case 0: // Request [msgid, method, params]
 				ERR_FAIL_COND_V_MSG(msg_arr.size() != 4, ERR_INVALID_PARAMETER, _err_msg);
 				call_deferred(SNAME("_request_received"), msg_arr[1], msg_arr[2], msg_arr[3]);
 				break;
-			case 1: // Response
+			case 1: // Response [msgid, error, result]
 				ERR_FAIL_COND_V_MSG(msg_arr.size() != 4, ERR_INVALID_PARAMETER, _err_msg);
 				if (sync_started && sync_msgid == int(msg_arr[1])) {
 					// Sync request responded.
@@ -118,7 +118,7 @@ Error MessagePackRPC::_message_handle(const Variant &p_message) {
 				}
 				call_deferred(SNAME("_response_received"), msg_arr[1], msg_arr[2], msg_arr[3]);
 				break;
-			case 2: // Notification
+			case 2: // Notification [method, params]
 				ERR_FAIL_COND_V_MSG(msg_arr.size() != 3, ERR_INVALID_PARAMETER, _err_msg);
 				call_deferred(SNAME("_notification_received"), msg_arr[1], msg_arr[2]);
 				break;
@@ -331,6 +331,18 @@ void MessagePackRPC::close() {
 	tcp_stream->disconnect_from_host();
 }
 
+Error MessagePackRPC::register_request(const String &p_method, const Callable &p_callable, bool p_rewrite) {
+	ERR_FAIL_COND_V_MSG((!p_rewrite && request_map.has(p_method)), ERR_ALREADY_EXISTS, "Request '" + p_method + "' already exist.");
+	request_map[p_method] = p_callable;
+	return OK;
+}
+
+Error MessagePackRPC::register_notify(const String &p_method, const Callable &p_callable, bool p_rewrite) {
+	ERR_FAIL_COND_V_MSG((!p_rewrite && notify_map.has(p_method)), ERR_ALREADY_EXISTS, "Notify '" + p_method + "' already exist.");
+	notify_map[p_method] = p_callable;
+	return OK;
+}
+
 void MessagePackRPC::_got_error(Error p_err, const String &p_err_msg) {
 	emit_signal(SNAME("got_error"), p_err, p_err_msg);
 }
@@ -340,6 +352,11 @@ void MessagePackRPC::_message_received(const Variant &p_message) {
 }
 
 void MessagePackRPC::_request_received(int p_msgid, const String &p_method, const Array &p_params) {
+	if (request_map.has(p_method)) {
+		MessageQueue::get_singleton()->push_callable(request_map[p_method], p_msgid, p_params);
+		// registered request, not emit signal
+		return;
+	}
 	emit_signal(SNAME("request_received"), p_msgid, p_method, p_params);
 }
 
@@ -348,6 +365,11 @@ void MessagePackRPC::_response_received(int p_msgid, const Variant &p_error, con
 }
 
 void MessagePackRPC::_notification_received(const String &p_method, const Array &p_params) {
+	if (notify_map.has(p_method)) {
+		MessageQueue::get_singleton()->push_callable(notify_map[p_method], p_params);
+		// registered notification, not emit signal
+		return;
+	}
 	emit_signal(SNAME("notification_received"), p_method, p_params);
 }
 
@@ -566,6 +588,9 @@ void MessagePackRPC::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("connect_to", "address", "big_endian"), &MessagePackRPC::connect_to, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("takeover_connection", "tcp_connection"), &MessagePackRPC::takeover_connection);
 	ClassDB::bind_method(D_METHOD("close"), &MessagePackRPC::close);
+
+	ClassDB::bind_method(D_METHOD("register_request", "method", "callable", "rewrite"), &MessagePackRPC::register_request, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("register_notify", "method", "callable", "rewrite"), &MessagePackRPC::register_notify, DEFVAL(false));
 
 	ClassDB::bind_method(D_METHOD("_message_received", "message"), &MessagePackRPC::_message_received);
 	ClassDB::bind_method(D_METHOD("_request_received", "msgid", "method", "params"), &MessagePackRPC::_request_received);

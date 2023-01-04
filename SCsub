@@ -9,7 +9,7 @@ env_msgpack = env_modules.Clone()
 
 mpack_dir = "mpack/src/"
 mpack_obj = []
-mpack_flags = []
+mpack_flags = ["MPACK_EXTENSIONS"]
 mpack_sources = [
     "mpack/mpack-common.c",
     "mpack/mpack-expect.c",

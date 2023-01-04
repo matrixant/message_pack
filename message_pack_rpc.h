@@ -68,11 +68,13 @@ class MessagePackRPC : public MessagePack {
 	int in_tail = 0;
 	int in_head = 0;
 
+	HashMap<String, Callable> request_map;
+	HashMap<String, Callable> notify_map;
+
 	uint64_t msgid = 0;
 
 	bool sync_started = false;
 	bool sync_responded;
-	bool sync_cancel_signal;
 	int sync_msgid;
 	Array sync_result;
 
@@ -103,6 +105,10 @@ public:
 	static void _thread_func(void *p_user_data);
 	Error connect_to(const String &p_address, bool p_big_endian = false);
 	Error takeover_connection(Ref<StreamPeerTCP> p_peer);
+
+	Error register_request(const String &p_method, const Callable &p_callable, bool p_rewrite = false);
+	Error register_notify(const String &p_method, const Callable &p_callable, bool p_rewrite = false);
+
 	void poll();
 	void close();
 
