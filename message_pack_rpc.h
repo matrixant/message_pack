@@ -97,6 +97,12 @@ protected:
 	static void _bind_methods();
 
 public:
+	enum MessageType {
+		MESSAGE_REQUEST = 0,
+		MESSAGE_RESPONSE,
+		MESSAGE_NOTIFICATION,
+	};
+
 	static PackedByteArray make_message_buf(const Array &p_message);
 	static PackedByteArray make_request(int p_msgid, const String &p_method, const Array &p_params = Array());
 	static PackedByteArray make_response(int p_msgid, const Variant &p_result, const Variant &p_error = Variant());
@@ -135,5 +141,7 @@ public:
 	MessagePackRPC(Ref<StreamPeerTCP> p_stream = Ref<StreamPeerTCP>());
 	~MessagePackRPC();
 };
+
+VARIANT_ENUM_CAST(MessagePackRPC::MessageType);
 
 #endif // MESSAGE_PACK_RPC_H

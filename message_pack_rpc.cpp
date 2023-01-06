@@ -38,15 +38,15 @@ PackedByteArray MessagePackRPC::make_message_buf(const Array &p_message) {
 	ERR_FAIL_COND_V_MSG((p_message[0].get_type() != Variant::Type::INT), Variant(),
 			"Not a valid message.");
 	switch (int(p_message[0])) {
-		case 0:
+		case MESSAGE_REQUEST:
 			// Request message: [type, msgid, method, params]
 			ERR_FAIL_COND_V(p_message.size() != 4, Variant());
 			break;
-		case 1:
+		case MESSAGE_RESPONSE:
 			// Response message: [type, msgid, error, result]
 			ERR_FAIL_COND_V(p_message.size() != 4, Variant());
 			break;
-		case 2:
+		case MESSAGE_NOTIFICATION:
 			// Notification message: [type, method, params]
 			ERR_FAIL_COND_V(p_message.size() != 3, Variant());
 			break;
@@ -60,7 +60,7 @@ PackedByteArray MessagePackRPC::make_message_buf(const Array &p_message) {
 PackedByteArray MessagePackRPC::make_request(int p_msgid, const String &p_method, const Array &p_params) {
 	Array msg;
 	msg.resize(4);
-	msg[0] = 0;
+	msg[0] = MESSAGE_REQUEST;
 	msg[1] = p_msgid;
 	msg[2] = p_method;
 	msg[3] = p_params;
@@ -71,7 +71,7 @@ PackedByteArray MessagePackRPC::make_request(int p_msgid, const String &p_method
 PackedByteArray MessagePackRPC::make_response(int p_msgid, const Variant &p_result, const Variant &p_error) {
 	Array msg;
 	msg.resize(4);
-	msg[0] = 1;
+	msg[0] = MESSAGE_RESPONSE;
 	msg[1] = p_msgid;
 	msg[2] = p_error;
 	msg[3] = p_result;
@@ -82,7 +82,7 @@ PackedByteArray MessagePackRPC::make_response(int p_msgid, const Variant &p_resu
 PackedByteArray MessagePackRPC::make_notification(const String &p_method, const Array &p_params) {
 	Array msg;
 	msg.resize(3);
-	msg[0] = 2;
+	msg[0] = MESSAGE_NOTIFICATION;
 	msg[1] = p_method;
 	msg[2] = p_params;
 
@@ -102,11 +102,11 @@ Error MessagePackRPC::_message_handle(const Variant &p_message) {
 		}
 
 		switch (int(msg_arr[0])) {
-			case 0: // Request [msgid, method, params]
+			case MESSAGE_REQUEST: // Request [msgid, method, params]
 				ERR_FAIL_COND_V_MSG(msg_arr.size() != 4, ERR_INVALID_PARAMETER, _err_msg);
 				call_deferred(SNAME("_request_received"), msg_arr[1], msg_arr[2], msg_arr[3]);
 				break;
-			case 1: // Response [msgid, error, result]
+			case MESSAGE_RESPONSE: // Response [msgid, error, result]
 				ERR_FAIL_COND_V_MSG(msg_arr.size() != 4, ERR_INVALID_PARAMETER, _err_msg);
 				if (sync_started && sync_msgid == int(msg_arr[1])) {
 					// Sync request responded.
@@ -118,7 +118,7 @@ Error MessagePackRPC::_message_handle(const Variant &p_message) {
 				}
 				call_deferred(SNAME("_response_received"), msg_arr[1], msg_arr[2], msg_arr[3]);
 				break;
-			case 2: // Notification [method, params]
+			case MESSAGE_NOTIFICATION: // Notification [method, params]
 				ERR_FAIL_COND_V_MSG(msg_arr.size() != 3, ERR_INVALID_PARAMETER, _err_msg);
 				call_deferred(SNAME("_notification_received"), msg_arr[1], msg_arr[2]);
 				break;
@@ -423,7 +423,7 @@ Array MessagePackRPC::sync_callv(const String &p_method, uint64_t p_timeout_msec
 	ERR_FAIL_COND_V_MSG(!running, Array(), "Connect to a peer first.");
 	Array msg_req;
 	msg_req.resize(4);
-	msg_req[0] = 0;
+	msg_req[0] = MESSAGE_REQUEST;
 	msg_req[1] = msgid;
 	msg_req[2] = p_method;
 	msg_req[3] = p_params;
@@ -507,7 +507,7 @@ Error MessagePackRPC::async_callv(const String &p_method, const Array &p_params)
 
 	Array msg_req;
 	msg_req.resize(4);
-	msg_req[0] = 0;
+	msg_req[0] = MESSAGE_REQUEST;
 	msg_req[1] = msgid;
 	msg_req[2] = p_method;
 	msg_req[3] = p_params;
@@ -522,7 +522,7 @@ Error MessagePackRPC::response(uint64_t p_msgid, const Variant &p_result) {
 
 	Array msg_req;
 	msg_req.resize(4);
-	msg_req[0] = 1;
+	msg_req[0] = MESSAGE_RESPONSE;
 	msg_req[1] = p_msgid;
 	msg_req[2] = Variant();
 	msg_req[3] = p_result;
@@ -536,7 +536,7 @@ Error MessagePackRPC::response_error(uint64_t p_msgid, const Variant &p_error) {
 
 	Array msg_req;
 	msg_req.resize(4);
-	msg_req[0] = 1;
+	msg_req[0] = MESSAGE_RESPONSE;
 	msg_req[1] = p_msgid;
 	msg_req[2] = p_error;
 	msg_req[3] = Variant();
@@ -550,7 +550,7 @@ Error MessagePackRPC::notifyv(const String &p_method, const Array &p_params) {
 
 	Array msg_req;
 	msg_req.resize(3);
-	msg_req[0] = 2;
+	msg_req[0] = MESSAGE_NOTIFICATION;
 	msg_req[1] = p_method;
 	msg_req[2] = p_params;
 	ERR_FAIL_COND_V_MSG(_put_message(msg_req) != OK, ERR_OUT_OF_MEMORY, "Message queue is full.");
@@ -631,4 +631,8 @@ void MessagePackRPC::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("request_received", PropertyInfo(Variant::INT, "msgid"), PropertyInfo(Variant::STRING, "method"), PropertyInfo(Variant::ARRAY, "params")));
 	ADD_SIGNAL(MethodInfo("response_received", PropertyInfo(Variant::INT, "msgid"), PropertyInfo(Variant::OBJECT, "error"), PropertyInfo(Variant::ARRAY, "result")));
 	ADD_SIGNAL(MethodInfo("notification_received", PropertyInfo(Variant::STRING, "method"), PropertyInfo(Variant::ARRAY, "params")));
+
+	BIND_ENUM_CONSTANT(MESSAGE_REQUEST);
+	BIND_ENUM_CONSTANT(MESSAGE_RESPONSE);
+	BIND_ENUM_CONSTANT(MESSAGE_NOTIFICATION);
 }

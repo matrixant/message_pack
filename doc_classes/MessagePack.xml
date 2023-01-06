@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MessagePack" inherits="Object" version="4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A class helps you decode/encode a MessagePack packet.
+	</brief_description>
+	<description>
+		The [MessagePack] enables data to be converted to and from a MessagePack byte array. This useful for serializing data to save to a file or send over the network.
+		[b]Note:[/b] [MessagePack] currently only support the basic data type.
+		(Extension types and other data not listed in the specification are not supported, encoding these data will simply be replaced with a [code]null[/code].)
+		[b]Note:[/b] If you want to communicate with a server/client by MessagePack byte array, consider [MessagePackRPC] class.
+	</description>
+	<tutorials>
+		<link title="MessagePack specification">https://github.com/msgpack/msgpack/blob/master/spec.md</link>
+	</tutorials>
+	<methods>
+		<method name="encode" qualifiers="static">
+			<return type="Array" />
+			<param index="0" name="data" type="Variant" />
+			<description>
+				Returns [enum Error] code and encoded byte arra. This function returns two values, an [enum Error] code and a byte array.
+				If you want encode a godot value to MessagePack byte array:
+				[codeblock]
+				var data = [1, 2.3, false, {"test" : true}]
+				var result = MessagePack.encode(data);
+				var byte_array
+				if result[0] == OK:
+				    byte_array = result[1]
+				else:
+				    print("Error code: %d" % result[0])
+				# Then you can send the message data by tcp connection or other channel.
+				[/codeblock]
+			</description>
+		</method>
+		<method name="decode" qualifiers="static">
+			<return type="Array" />
+			<param index="0" name="msg_buf" type="PackedByteArray" />
+			<description>
+				Returns [enum Error] code and decoded data. This function returns two values, an [enum Error] code and a variant data.
+				Or you want decode a MessagePack data buffer:
+				[codeblock]
+				var msg_buf = [148, 1, 203, 64, 2, 102, 102, 102, 102, 102, 102, 194, 129, 164, 116, 101, 115, 116, 195]
+				var result = MessagePack.decode(msg_buf);
+				var data
+				if result[0] == OK:
+				    data = result[1]
+				else:
+				    print("Error code: %d" % result[0])
+				# Then you get the data: [1, 2.3, false, {"test" : true}]
+				[/codeblock]
+			</description>
+		</method>
+		<method name="start_stream">
+			<return type="Error" />
+			<param index="0" name="stream_reader" type="Callable" />
+			<param index="1" name="msgs_max" type="int" />
+			<description>
+				Start a process to handle [MessagePack] data streams. And when call [method update_stream], the object will call the [code]stream_reader[/code] to update new data.
+				The stream method can process incremental MessagePack bytes array.
+				Returns error when failed. Use [method get_error_message] for identifying the source of the failure.
+			</description>
+		</method>
+		<method name="update_stream">
+			<return type="Error" />
+			<description>
+				Update data to MessagePack's data buffer and try decode these data bytes into a value that godot can recognize.
+				Returns [code]OK[/code] when decoding successfully, return [code]ERR_SKIP[/code] when the data too few to decode.
+				Returns other error when there is a really error. Use [method get_error_message] for identifying the source of the failure.
+				[b]Example[/b]
+				[codeblock]
+				# buffer is the message data bytes received from network or other channels.
+				func stream_reader(bytes_read: int):
+				    var bytes = bytes_read if bytes_read &lt; buffer_size else buffer_size
+				    if bytes_read &lt; buffer.size():
+				        var sub_buf = buffer.slice(0, bytes_read)
+				        buffer = buffer.slice(bytes_read)
+				        return sub_buf
+				    else:
+				        var res = buffer
+				        buffer.clear()
+				        return res
+				
+				var msg_pack = MessagePack.new()
+				func _ready():
+				    msg_pack.start_stream(stream_reader)
+				
+				func _process(delta):
+				    if buffer_avaiable:
+				        if msg_pack.update_stream() == OK:
+				            print("Message received: %s" % str(msg_pack.get_data()))
+				        else:
+				            print("Message parser error: %s" % msg_pack.get_error_message())
+				[/codeblock]
+			</description>
+		</method>
+		<method name="reset_stream">
+			<return type="Error" />
+			<param index="0" name="msgs_max" type="int" />
+			<description>
+				Restart the stream handle process. Returns error when failed. 
+			</description>
+		</method>
+		<method name="get_data">
+			<return type="Variant" />
+			<description>
+				Get the latest data decoded from the stream.
+			</description>
+		</method>
+		<method name="get_bytes_remaining">
+			<return type="int" />
+			<description>
+				Get the bytes unhandled in the stream.
+			</description>
+		</method>
+		<method name="get_error_message">
+			<return type="String" />
+			<description>
+				Get the latest error message.
+			</description>
+		</method>
+	</methods>
+	<constants>
+	</constants>
+</class>

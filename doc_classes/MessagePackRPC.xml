@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MessagePackRPC" inherits="MessagePack" version="4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A class to process the MessagePack-RPC connection.
+	</brief_description>
+	<description>
+		The [MessagePackRPC] enables the RPC over a TCP connection which using the MessagePack protocol.
+		[b]Note:[/b] Currently only supports TCP connection.
+		[b]Note:[/b] If you don't want to communicate with a server or client, and just want to convert a MessagePack byte array to a Godot's value, or convert Godot's value to a MessagePack byte array, consider the [MessagePack] class.
+	</description>
+	<tutorials>
+		<link title="MessagePack-RPC specification">https://github.com/msgpack-rpc/msgpack-rpc/blob/master/spec.md</link>
+	</tutorials>
+	<signals>
+		<signal name="message_received">
+			<description>
+				Emitted when the message is received.
+			</description>
+		</signal>
+		<signal name="request_received">
+			<description>
+				Emitted when the request message is received.
+				[b]Note:[/b] If the request call a method registered, it will not emit signal. 
+			</description>
+		</signal>
+		<signal name="response_received">
+			<description>
+				Emitted when the response message is received.
+				[b]Note:[/b] If called synchronously, the response will not emit signal. 
+			</description>
+		</signal>
+		<signal name="notification_received">
+			<description>
+				Emitted when the notification message is received.
+				[b]Note:[/b] If the notification call a method registered, it will not emit signal. 
+			</description>
+		</signal>
+	</signals>
+	<methods>
+		<method name="make_message_buf" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="message" type="Array" />
+			<description>
+				Make a MessagePack byte array from a message array. Only supports message defined in the spec above. Any other type of message will not be encoded and return an empty array.
+				[codeblock]
+				var msg_buf = MessagePackRPC.make_message_buf([0, 1, "test", [1, 2.3, false, {"test" : true}]])
+				[/codeblock]
+			</description>
+		</method>
+		<method name="make_request" qualifiers="static">
+			<return type="PakcedByteArray" />
+			<param index="0" name="msgid" type="int" />
+			<param index="1" name="method" type="String" />
+			<param index="2" name="params" type="Array" default="[]" />
+			<description>
+				Make a MessagePack request byte array.
+			</description>
+		</method>
+		<method name="make_response" qualifiers="static">
+			<return type="PakcedByteArray" />
+			<param index="0" name="msgid" type="int" />
+			<param index="1" name="result" type="Variant" />
+			<param index="2" name="error" type="Variant" default="null" />
+			<description>
+				Make a MessagePack response byte array.
+			</description>
+		</method>
+		<method name="make_notification" qualifiers="static">
+			<return type="PakcedByteArray" />
+			<param index="0" name="method" type="String" />
+			<param index="1" name="params" type="Array" default="[]" />
+			<description>
+				Make a MessagePack notification byte array.
+			</description>
+		</method>
+		<method name="connect_to" >
+			<return type="int" enum="Error" />
+			<param index="0" name="address" type="String" />
+			<param index="1" name="big_endian" type="bool" default="false" />
+			<description>
+				Connect to a TCP host on the specified port. The address must begin with [code]"tcp://"[/code] and contains the port will be used to connect.
+				[b]Example[/b]
+				[codeblock]
+				var msg_rpc = MessagePackRPC.new()
+				var err = msg_rpc.connect_to("tcp://127.0.0.1:1234")
+				[/codeblock]
+				Returns an [enum Error] when the connection can not be established.
+			</description>
+		</method>
+		<method name="takeover_connection" >
+			<return type="int" enum="Error" />
+			<param index="0" name="tcp_connection" type="StreamPeerTCP" />
+			<description>
+				Takeover a connection already exists.
+				[b]Example[/b]
+				[codeblock]
+				var server := TCPServer.new()
+				var msg_rpc := MessagePackRPC.new()
+
+				func _on_test_request(msgid: int, params: Array):
+				    print_debug("Test request received: %s" % str([msgid, params]))
+
+				func _ready():
+				    msg_rpc.register_request("test_request", _on_test_request)
+				    msg_rpc.message_received.connect(message_handle)
+				    server.listen(12345, "127.0.0.1")
+
+				func _physics_process(delta):
+				    if server.is_listening():
+				        if server.is_connection_available():
+				            if not msg_rpc.is_rpc_connected():
+				                msg_rpc.takeover_connection(server.take_connection())
+
+				func message_handle(msg: Array):
+				    print("Message received: %s" % str([msg]))
+				[/codeblock]
+				Returns an [enum Error] when the connection can not be established.
+			</description>
+		</method>
+		<method name="register_request" >
+			<return type="int" enum="Error" />
+			<param index="0" name="method" type="String" />
+			<param index="1" name="callable" type="Callable" />
+			<param index="2" name="rewrite" type="bool" default="false" />
+			<description>
+				Register a request, when a rpc called the [code]method[/code] by a request the [code]callable[/code] will be called.
+				See the example under [method takeover_connection].
+				Returns an [enum Error] when register failed.
+				[b]Note:[/b] When registered, the request called [code]method[/code] will not emit signal.
+			</description>
+		</method>
+		<method name="register_notify" >
+			<return type="int" enum="Error" />
+			<param index="0" name="method" type="String" />
+			<param index="1" name="callable" type="Callable" />
+			<param index="2" name="rewrite" type="bool" default="false" />
+			<description>
+				Register a notification, when a rpc called the [code]method[/code] by a notification the [code]callable[/code] will be called.
+				Returns an [enum Error] when register failed.
+				[b]Note:[/b] When registered, the notification called [code]method[/code] will not emit signal.
+			</description>
+		</method>
+		<method name="get_next_msgid" >
+			<return type="int" />
+			<description>
+				Get the next message id.
+				[b]Note:[/b] Not recommend to use this method. The [MessagePackRPC] object will manage it automatically.
+			</description>
+		</method>
+		<method name="is_rpc_connected" >
+			<return type="bool" />
+			<description>
+				Whether the RPC is connected.
+			</description>
+		</method>
+		<method name="close" >
+			<description>
+				Close the connection.
+			</description>
+		</method>
+		<method name="sync_callv" >
+			<return type="Array" />
+			<param index="0" name="method" type="String" />
+			<param index="1" name="timeout_msec" type="int" default="100" />
+			<param index="2" name="params" type="Array" default="[]" />
+			<description>
+				Call remote method synchronously. Returns an empty array when timeout.
+				[b]Note:[/b] Synchronous call will not emit signal when the response received.
+			</description>
+		</method>
+		<method name="async_callv" >
+			<return type="int" enum="Error" />
+			<param index="0" name="method" type="String" />
+			<param index="1" name="params" type="Array" default="[]" />
+			<description>
+				Call remote method asynchronously.
+				[b]Note:[/b] Asynchronous call will not return the result directly, use the signal to get the message data. 
+			</description>
+		</method>
+		<method name="response" >
+			<return type="int" enum="Error" />
+			<param index="0" name="msgid" type="int" />
+			<param index="1" name="result" type="Variant" />
+			<description>
+				Response the RPC request with [code]result[/code].
+			</description>
+		</method>
+		<method name="response_error" >
+			<return type="int" enum="Error" />
+			<param index="0" name="msgid" type="int" />
+			<param index="1" name="error" type="Variant" />
+			<description>
+				Response the RPC request with [code]error[/code].
+			</description>
+		</method>
+		<method name="notifyv" >
+			<return type="int" enum="Error" />
+			<param index="0" name="method" type="String" />
+			<param index="1" name="params" type="Array" default="[]" />
+			<description>
+				Send a RPC notification.
+			</description>
+		</method>
+	</methods>
+	<constants>
+	</constants>
+</class>

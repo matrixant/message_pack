@@ -500,7 +500,7 @@ void MessagePack::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("start_stream", "stream_reader", "msgs_max"), &MessagePack::start_stream, DEFVAL(_MSG_MAX_SIZE));
 	ClassDB::bind_method(D_METHOD("update_stream"), &MessagePack::update_stream);
-	ClassDB::bind_method(D_METHOD("reset_stream"), &MessagePack::reset_stream);
+	ClassDB::bind_method(D_METHOD("reset_stream", "msgs_max"), &MessagePack::reset_stream, DEFVAL(_MSG_MAX_SIZE));
 	ClassDB::bind_method(D_METHOD("get_data"), &MessagePack::get_data);
 	ClassDB::bind_method(D_METHOD("get_bytes_remaining"), &MessagePack::get_bytes_remaining);
 	ClassDB::bind_method(D_METHOD("get_error_message"), &MessagePack::get_error_message);
