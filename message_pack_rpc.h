@@ -48,11 +48,10 @@
 // Max message queue size
 #define _MSG_QUEUE_MAX_SIZE 2048
 
-class MessagePackRPC : public MessagePack {
-	GDCLASS(MessagePackRPC, MessagePack);
+class MessagePackRPC : public Object {
+	GDCLASS(MessagePackRPC, Object);
 
-	mpack_tree_t _tree;
-	bool _started = false;
+	MessagePack msg_pack;
 
 	Mutex mutex;
 	Thread thread;
@@ -78,49 +77,50 @@ class MessagePackRPC : public MessagePack {
 	int sync_msgid;
 	Array sync_result;
 
-	typedef size_t (*Callback)(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
-
 	void _error_handle(Error p_err, const String p_err_msg);
 	Error _message_handle(const Variant &p_message);
 	void _write_out();
 	void _read_in();
-	Error _try_connect(const String &p_ip, int p_port);
-	static size_t _read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
-	Error _start_stream(Callback p_callback, int p_msgs_max = _MSG_MAX_SIZE);
-	Error _update_stream();
+	Error _try_connect(const IPAddress &p_ip, int p_port);
+	void _start_stream(int p_msgs_max = _MSG_MAX_SIZE);
+	Error _try_parse_stream();
 
 	Array _sync_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	Error _async_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	Error _notify(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
+
+	static size_t _stream_reader(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
 
 protected:
 	static void _bind_methods();
 
 public:
 	enum MessageType {
-		MESSAGE_REQUEST = 0,
-		MESSAGE_RESPONSE,
-		MESSAGE_NOTIFICATION,
+		REQUEST = 0,
+		RESPONSE,
+		NOTIFICATION,
 	};
 
-	static PackedByteArray make_message_buf(const Array &p_message);
+	static PackedByteArray make_message_byte_array(const Array &p_message);
 	static PackedByteArray make_request(int p_msgid, const String &p_method, const Array &p_params = Array());
 	static PackedByteArray make_response(int p_msgid, const Variant &p_result, const Variant &p_error = Variant());
 	static PackedByteArray make_notification(const String &p_method, const Array &p_params = Array());
 
 	static void _thread_func(void *p_user_data);
-	Error connect_to(const String &p_address, bool p_big_endian = false);
+	Error connect_to_host(const IPAddress &p_ip, int p_port, bool p_big_endian = false);
 	Error takeover_connection(Ref<StreamPeerTCP> p_peer);
 
+#if MPACK_EXTENSIONS
+	void register_extension_type(int8_t p_ext_type, const Callable &p_decoder);
+#endif
+
 	Error register_request(const String &p_method, const Callable &p_callable, bool p_rewrite = false);
-	Error register_notify(const String &p_method, const Callable &p_callable, bool p_rewrite = false);
+	Error unregister_request(const String &p_method);
+	Error register_notification(const String &p_method, const Callable &p_callable, bool p_rewrite = false);
+	Error unregister_notification(const String &p_method);
 
 	void poll();
 	void close();
-
-	Error start_stream(const Callable &r_stream_reader, int p_msgs_max = _MSG_MAX_SIZE) { return FAILED; }
-	Error update_stream() { return FAILED; }
-	Error reset_stream(int p_msgs_max = _MSG_MAX_SIZE) { return FAILED; }
 
 	void _got_error(Error p_err, const String &p_err_msg);
 	void _message_received(const Variant &p_message);
@@ -129,6 +129,7 @@ public:
 	void _notification_received(const String &p_method, const Array &p_params);
 
 	inline uint64_t get_next_msgid() const { return msgid; }
+	inline void set_next_msgid(int p_msgid) { msgid = p_msgid; }
 	bool is_rpc_connected();
 	Error _put_message(const Array &p_msg);
 

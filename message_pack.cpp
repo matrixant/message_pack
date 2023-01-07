@@ -129,11 +129,12 @@ Variant MessagePack::_read_recursive(mpack_reader_t &p_reader, int p_depth) {
 			mpack_done_map(&p_reader);
 			return map;
 		} break;
+
 		default:
-			mpack_reader_flag_error(&p_reader, mpack_error_unsupported);
 			break;
 	}
-	return Variant();
+	mpack_reader_flag_error(&p_reader, mpack_error_unsupported);
+	ERR_FAIL_V_MSG(Variant(), "The data type [" + String::num_int64(mpack_tag_type(&tag)) + "] is unsupported.");
 }
 
 void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int p_depth) {
@@ -144,16 +145,16 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 	}
 
 	switch (p_val.get_type()) {
-		case Variant::Type::NIL:
+		case Variant::NIL:
 			mpack_write_nil(&p_writer);
 			break;
-		case Variant::Type::BOOL:
+		case Variant::BOOL:
 			mpack_write_bool(&p_writer, p_val);
 			break;
-		case Variant::Type::INT:
+		case Variant::INT:
 			mpack_write_int(&p_writer, p_val);
 			break;
-		case Variant::Type::FLOAT: {
+		case Variant::FLOAT: {
 			double d = p_val;
 			float f = d;
 			if (double(f) != d) {
@@ -164,20 +165,20 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 				mpack_write_float(&p_writer, p_val);
 			}
 		} break;
-		case Variant::Type::STRING_NAME:
-		case Variant::Type::STRING: {
+		case Variant::STRING_NAME:
+		case Variant::STRING: {
 			// NOTE: Use utf8 encoding
 			PackedByteArray str_buf = String(p_val).to_utf8_buffer();
 			mpack_write_str(&p_writer, (const char *)str_buf.ptr(), str_buf.size());
 		} break;
-		case Variant::Type::PACKED_BYTE_ARRAY: {
+		case Variant::PACKED_BYTE_ARRAY: {
 			// NOTE: When pack bin data, it must be typed as a PackedByteArray
 			// And if you want pack an array contains integer to the message pack,
 			// don't use PackedByteArray, because it will be treated as a binary data buffer.
 			PackedByteArray bin_buf = p_val;
 			mpack_write_bin(&p_writer, (const char *)bin_buf.ptr(), bin_buf.size());
 		} break;
-		case Variant::Type::ARRAY: {
+		case Variant::ARRAY: {
 			// NOTE: Not typed array will be processed as a variable array to message pack.
 			// But the elements in array which type is unsupported will be treated as a nil.
 			Array arr = p_val;
@@ -187,8 +188,8 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			}
 			mpack_finish_array(&p_writer);
 		} break;
-		case Variant::Type::PACKED_INT32_ARRAY:
-		case Variant::Type::PACKED_INT64_ARRAY: {
+		case Variant::PACKED_INT32_ARRAY:
+		case Variant::PACKED_INT64_ARRAY: {
 			PackedInt64Array arr = p_val;
 			mpack_start_array(&p_writer, arr.size());
 			// Typed array write elememt one by one.
@@ -197,7 +198,7 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			}
 			mpack_finish_array(&p_writer);
 		} break;
-		case Variant::Type::PACKED_FLOAT32_ARRAY: {
+		case Variant::PACKED_FLOAT32_ARRAY: {
 			PackedFloat32Array arr = p_val;
 			mpack_start_array(&p_writer, arr.size());
 			// Typed array write elememt one by one.
@@ -206,7 +207,7 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			}
 			mpack_finish_array(&p_writer);
 		} break;
-		case Variant::Type::PACKED_FLOAT64_ARRAY: {
+		case Variant::PACKED_FLOAT64_ARRAY: {
 			PackedFloat64Array arr = p_val;
 			mpack_start_array(&p_writer, arr.size());
 			// Typed array write elememt one by one.
@@ -215,7 +216,7 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			}
 			mpack_finish_array(&p_writer);
 		} break;
-		case Variant::Type::PACKED_STRING_ARRAY: {
+		case Variant::PACKED_STRING_ARRAY: {
 			PackedStringArray arr = p_val;
 			mpack_start_array(&p_writer, arr.size());
 			PackedByteArray str_buf;
@@ -227,7 +228,7 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			}
 			mpack_finish_array(&p_writer);
 		} break;
-		case Variant::Type::DICTIONARY: {
+		case Variant::DICTIONARY: {
 			Dictionary dict = p_val;
 			Array keys = dict.keys();
 			Array vals = dict.values();
@@ -241,10 +242,10 @@ void MessagePack::_write_recursive(mpack_writer_t &p_writer, Variant p_val, int 
 			mpack_finish_map(&p_writer);
 		} break;
 
-		// TODO: support ext type
 		default:
-			// Unknown type
+			// Unsupported type
 			mpack_write_nil(&p_writer);
+			ERR_FAIL_MSG("The data type [" + Variant::get_type_name(p_val.get_type()) + "] is unsupported.");
 			break;
 	}
 }
@@ -316,10 +317,37 @@ Variant MessagePack::_parse_node_recursive(mpack_node_t p_node, int p_depth) {
 			}
 			return map;
 		} break;
+#if MPACK_EXTENSIONS
+		case mpack_type_ext: {
+			int8_t ext = mpack_node_exttype(p_node);
+			if (ext == MPACK_EXTTYPE_TIMESTAMP) {
+				mpack_timestamp_t timestamp = mpack_node_timestamp(p_node);
+				Dictionary timestamp_dict;
+				timestamp_dict["seconds"] = timestamp.seconds;
+				timestamp_dict["nanoseconds"] = timestamp.nanoseconds;
+				return timestamp_dict;
+			} else if (ext_decoder.has(ext)) {
+				ERR_FAIL_COND_V_MSG(!ext_decoder[ext].is_valid(), Variant(), "Invalid extension type decoder.");
+				uint32_t len = mpack_node_data_len(p_node);
+				PackedByteArray ext_data;
+				if (len > 0) {
+					ext_data.resize(len);
+					memcpy(ext_data.ptrw(), mpack_node_data(p_node), len);
+				}
+				Array params;
+				params.resize(2);
+				params[0] = ext;
+				params[1] = ext_data;
+				return ext_decoder[ext].callv(params);
+			}
+			ERR_FAIL_V_MSG(Variant(), "Unsupported extension type: " + String::num_int64(ext));
+		} break;
+#endif
+
 		default:
 			break;
 	}
-	return Variant();
+	ERR_FAIL_V_MSG(Variant(), "The data type [" + String::num_int64(p_node.data->type) + "] is unsupported.");
 }
 
 Error MessagePack::_got_error_or_not(mpack_error_t p_err, String &r_err_str) {
@@ -421,26 +449,26 @@ Array MessagePack::encode(const Variant &p_val) {
 
 size_t MessagePack::_read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count) {
 	MessagePack *msgpack = (MessagePack *)mpack_tree_context(p_tree);
-	PackedByteArray stream_buf = msgpack->_get_stream_data(p_count);
-	if (Variant(stream_buf).get_type() == Variant::Type::NIL) {
-		return -1;
+	size_t read_size = MIN(p_count, msgpack->stream_tail - msgpack->stream_head);
+	const uint8_t *stream_ptr = msgpack->stream_data.ptr();
+	if (read_size > 0) {
+		memcpy(r_buffer, stream_ptr + msgpack->stream_head, read_size);
+		msgpack->stream_head += read_size;
 	}
-	if (stream_buf.size() > 0) {
-		memcpy(r_buffer, stream_buf.ptr(), stream_buf.size());
-	}
-	return stream_buf.size();
+	return read_size;
 }
 
-Error MessagePack::start_stream(const Callable &r_stream_reader, int p_msgs_max) {
-	ERR_FAIL_COND_V_MSG(!r_stream_reader.is_valid(),
-			ERR_METHOD_NOT_FOUND, "Stream reader is invalid, check and input a valid callable.");
-
-	this->stream_reader = r_stream_reader;
-
-	return reset_stream();
+void MessagePack::start_stream_with_reader(const Callback p_reader, void *context, int p_msgs_max) {
+	if (started) {
+		mpack_tree_destroy(&tree);
+	}
+	err_msg = "";
+	data = Variant();
+	mpack_tree_init_stream(&tree, p_reader, context, p_msgs_max, _NODE_MAX_SIZE);
+	started = true;
 }
 
-Error MessagePack::update_stream() {
+Error MessagePack::try_parse_stream() {
 	if (!mpack_tree_try_parse(&tree)) {
 		// if false, error or wating.
 		Error err = _got_error_or_not(mpack_tree_error(&tree), err_msg);
@@ -455,35 +483,25 @@ Error MessagePack::update_stream() {
 	return OK;
 }
 
-Error MessagePack::reset_stream(int p_msgs_max) {
-	ERR_FAIL_COND_V_MSG(stream_reader.is_null(),
-			ERR_METHOD_NOT_FOUND, "Stream reader is invalid, call start_stream and input a valid callable.");
-	if (started) {
-		mpack_tree_destroy(&tree);
-	}
-	err_msg = "";
-
-	mpack_tree_init_stream(&tree, &_read_stream, this, p_msgs_max, _NODE_MAX_SIZE);
-
-	started = true;
-	return OK;
+void MessagePack::start_stream(int p_msgs_max) {
+	start_stream_with_reader(_read_stream, this, p_msgs_max);
 }
 
-PackedByteArray MessagePack::_get_stream_data(int p_len) {
-	ERR_FAIL_COND_V_MSG(!stream_reader.is_valid(),
-			Variant(), "Stream reader is invalid, call start_stream and input a valid callable.");
-	const Variant param = p_len;
-	const Variant *param_ptr = &param;
-	Variant result;
-	Callable::CallError err;
-	stream_reader.callp((const Variant **)&param_ptr, 1, result, err);
-	ERR_FAIL_COND_V_MSG(err.error != Callable::CallError::CALL_OK,
-			Variant(), "An error occurred while call stream reader: " + String(stream_reader.get_method()));
-	if (Variant::can_convert_strict(result.get_type(), Variant::Type::PACKED_BYTE_ARRAY)) {
-		return PackedByteArray(result);
-	}
-	ERR_FAIL_V_MSG(Variant(), String(stream_reader.get_method()) + " returned an unsupported type.");
+Error MessagePack::update_stream(const PackedByteArray &p_data, int p_from, int p_to) {
+	ERR_FAIL_COND_V_MSG(p_from > p_to, ERR_INVALID_PARAMETER, "Index 'to' must be greater than 'from'.");
+	ERR_FAIL_COND_V_MSG(p_from >= p_data.size(), ERR_INVALID_PARAMETER, String("Index from ") + p_from + "out of range of data which only has " + p_data.size() + " elements.");
+	stream_data = p_data;
+	stream_head = p_from;
+	stream_tail = MIN(p_to, p_data.size());
+
+	return try_parse_stream();
 }
+
+#if MPACK_EXTENSIONS
+void MessagePack::register_extension_type(int8_t p_ext_type, const Callable &p_decoder) {
+	ext_decoder[p_ext_type] = p_decoder;
+}
+#endif
 
 MessagePack::MessagePack() {
 }
@@ -498,10 +516,13 @@ void MessagePack::_bind_methods() {
 	ClassDB::bind_static_method("MessagePack", D_METHOD("decode", "msg_buf"), &MessagePack::decode);
 	ClassDB::bind_static_method("MessagePack", D_METHOD("encode", "data"), &MessagePack::encode);
 
-	ClassDB::bind_method(D_METHOD("start_stream", "stream_reader", "msgs_max"), &MessagePack::start_stream, DEFVAL(_MSG_MAX_SIZE));
-	ClassDB::bind_method(D_METHOD("update_stream"), &MessagePack::update_stream);
-	ClassDB::bind_method(D_METHOD("reset_stream", "msgs_max"), &MessagePack::reset_stream, DEFVAL(_MSG_MAX_SIZE));
+#if MPACK_EXTENSIONS
+	ClassDB::bind_method(D_METHOD("register_extension_type", "type_id", "decoder"), &MessagePack::register_extension_type);
+#endif
+
+	ClassDB::bind_method(D_METHOD("start_stream", "msgs_max"), &MessagePack::start_stream, DEFVAL(_MSG_MAX_SIZE));
+	ClassDB::bind_method(D_METHOD("update_stream", "data", "from", "to"), &MessagePack::update_stream, DEFVAL(0), DEFVAL(INT_MAX));
 	ClassDB::bind_method(D_METHOD("get_data"), &MessagePack::get_data);
-	ClassDB::bind_method(D_METHOD("get_bytes_remaining"), &MessagePack::get_bytes_remaining);
+	ClassDB::bind_method(D_METHOD("get_current_stream_length"), &MessagePack::get_current_stream_length);
 	ClassDB::bind_method(D_METHOD("get_error_message"), &MessagePack::get_error_message);
 }

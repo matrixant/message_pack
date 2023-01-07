@@ -55,35 +55,48 @@
 class MessagePack : public Object {
 	GDCLASS(MessagePack, Object);
 
-	static Variant _read_recursive(mpack_reader_t &p_reader, int p_depth);
-	static void _write_recursive(mpack_writer_t &p_writer, Variant p_val, int p_depth);
-
-protected:
-	static void _bind_methods();
+#if MPACK_EXTENSIONS
+	HashMap<int8_t, Callable> ext_decoder;
+#endif
 
 	Variant data;
 	String err_msg;
 	mpack_tree_t tree;
 	bool started = false;
 
-	Callable stream_reader;
+	PackedByteArray stream_data;
+	int stream_head;
+	int stream_tail;
 
 	static Error _got_error_or_not(mpack_error_t p_err, String &r_err_str);
 	Variant _parse_node_recursive(mpack_node_t p_node, int p_depth);
 
 	static size_t _read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
 
+	static Variant _read_recursive(mpack_reader_t &p_reader, int p_depth);
+	static void _write_recursive(mpack_writer_t &p_writer, Variant p_val, int p_depth);
+
+	typedef size_t (*Callback)(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
+
+protected:
+	static void _bind_methods();
+
 public:
 	static Array decode(const PackedByteArray &p_msg_buf);
 	static Array encode(const Variant &p_val);
 
-	virtual Error start_stream(const Callable &r_stream_reader, int p_msgs_max = _MSG_MAX_SIZE);
-	virtual Error update_stream();
-	virtual Error reset_stream(int p_msgs_max = _MSG_MAX_SIZE);
-	PackedByteArray _get_stream_data(int p_len);
+	void start_stream_with_reader(const Callback p_reader, void *context, int p_msgs_max = _MSG_MAX_SIZE);
+	Error try_parse_stream();
+
+	void start_stream(int p_msgs_max = _MSG_MAX_SIZE);
+	Error update_stream(const PackedByteArray &p_data, int p_from = 0, int p_to = INT_MAX);
+
+#if MPACK_EXTENSIONS
+	void register_extension_type(int8_t p_ext_type, const Callable &p_decoder);
+#endif
 
 	inline Variant get_data() const { return data; }
-	inline int get_bytes_remaining() const { return tree.data_length; }
+	inline int get_current_stream_length() const { return tree.data_length; }
 	inline String get_error_message() const { return err_msg; }
 
 	MessagePack();
