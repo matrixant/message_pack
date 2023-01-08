@@ -449,7 +449,8 @@ Array MessagePack::encode(const Variant &p_val) {
 
 size_t MessagePack::_read_stream(mpack_tree_t *p_tree, char *r_buffer, size_t p_count) {
 	MessagePack *msgpack = (MessagePack *)mpack_tree_context(p_tree);
-	size_t read_size = MIN(p_count, msgpack->stream_tail - msgpack->stream_head);
+	size_t bytes_left = msgpack->stream_tail - msgpack->stream_head;
+	size_t read_size = MIN(p_count, bytes_left);
 	const uint8_t *stream_ptr = msgpack->stream_data.ptr();
 	if (read_size > 0) {
 		memcpy(r_buffer, stream_ptr + msgpack->stream_head, read_size);

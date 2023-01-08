@@ -9,7 +9,7 @@
 	</description>
 	<tutorials>
 		<link title="MessagePack-RPC specification">https://github.com/msgpack-rpc/msgpack-rpc/blob/master/spec.md</link>
-		<link title="MessagePack module example">https://github.com/matrixant/message_pack_example</link>
+		<link title="MessagePack example">https://github.com/matrixant/message_pack_example</link>
 	</tutorials>
 	<signals>
 		<signal name="rpc_connected">
@@ -51,6 +51,17 @@
 			</description>
 		</signal>
 	</signals>
+	<constants>
+		<constant name="REQUEST" value="0" enum="MessageType">
+			MessagePack request.
+		</constant>
+		<constant name="RESPONSE" value="1" enum="MessageType">
+			MessagePack response.
+		</constant>
+		<constant name="NOTIFICATION" value="2" enum="MessageType">
+			MessagePack notification.
+		</constant>
+	</constants>
 	<methods>
 		<method name="make_message_byte_array" qualifiers="static">
 			<return type="PackedByteArray" />

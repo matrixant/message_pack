@@ -11,7 +11,7 @@
 	</description>
 	<tutorials>
 		<link title="MessagePack specification">https://github.com/msgpack/msgpack/blob/master/spec.md</link>
-		<link title="MessagePack module example">https://github.com/matrixant/message_pack_example</link>
+		<link title="MessagePack example">https://github.com/matrixant/message_pack_example</link>
 	</tutorials>
 	<methods>
 		<method name="encode" qualifiers="static">

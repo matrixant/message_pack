@@ -224,7 +224,8 @@ void MessagePackRPC::register_extension_type(int8_t p_ext_type, const Callable &
 
 size_t MessagePackRPC::_stream_reader(mpack_tree_t *p_tree, char *r_buffer, size_t p_count) {
 	MessagePackRPC *rpc = (MessagePackRPC *)mpack_tree_context(p_tree);
-	size_t read_size = MIN(p_count, rpc->in_tail - rpc->in_head);
+	size_t bytes_left = rpc->in_tail - rpc->in_head;
+	size_t read_size = MIN(p_count, bytes_left);
 	const uint8_t *stream_ptr = rpc->in_buf.ptr();
 	if (read_size > 0) {
 		memcpy(r_buffer, stream_ptr + rpc->in_head, read_size);
