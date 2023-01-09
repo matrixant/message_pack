@@ -7,7 +7,7 @@
 		The [MessagePack] enables data to be converted to and from a MessagePack byte array. This useful for serializing data to save to a file or send over the network.
 		[b]Note:[/b] [MessagePack] currently only support the basic data type.
 		(Extension types and other data not listed in the specification are not supported, encoding these data will simply be replaced with a [code]null[/code].)
-		[b]Note:[/b] If you want to communicate with a server/client by MessagePack byte array, consider [MessagePackRPC] class.
+		[b]Note:[/b] If you want to communicate with a server or client by MessagePack byte array, consider [MessagePackRPC] class.
 	</description>
 	<tutorials>
 		<link title="MessagePack specification">https://github.com/msgpack/msgpack/blob/master/spec.md</link>
@@ -109,6 +109,4 @@
 			</description>
 		</method>
 	</methods>
-	<constants>
-	</constants>
 </class>

@@ -24,7 +24,7 @@
 		</signal>
 		<signal name="got_error">
 			<description>
-				Emitted when the there is an error.
+				Emitted when there is an error.
 			</description>
 		</signal>
 		<signal name="message_received">
@@ -252,6 +252,4 @@
 			</description>
 		</method>
 	</methods>
-	<constants>
-	</constants>
 </class>
