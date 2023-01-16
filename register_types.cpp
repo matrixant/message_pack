@@ -29,7 +29,7 @@
 /*************************************************************************/
 
 #include "register_types.h"
-#include "core/object/class_db.h"
+
 #include "message_pack.h"
 #include "message_pack_rpc.h"
 
@@ -47,3 +47,23 @@ void uninitialize_message_pack_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 }
+
+#ifdef GDEXTENSION
+
+#include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/core/memory.hpp>
+
+extern "C" {
+// Initialization.
+GDExtensionBool GDE_EXPORT message_pack_library_init(const GDExtensionInterface *p_interface, GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
+	godot::GDExtensionBinding::InitObject init_obj(p_interface, p_library, r_initialization);
+
+	init_obj.register_initializer(initialize_message_pack_module);
+	init_obj.register_terminator(uninitialize_message_pack_module);
+	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
+
+	return init_obj.init();
+}
+} // extern "C"
+
+#endif

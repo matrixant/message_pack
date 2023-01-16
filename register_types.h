@@ -31,7 +31,13 @@
 #ifndef MESSAGE_PACK_REGISTER_TYPES_H
 #define MESSAGE_PACK_REGISTER_TYPES_H
 
+#ifdef GDEXTENSION
+#include <godot_cpp/core/class_db.hpp>
+using namespace godot;
+#else
+#include "core/object/class_db.h"
 #include "modules/register_module_types.h"
+#endif
 
 void initialize_message_pack_module(ModuleInitializationLevel p_level);
 void uninitialize_message_pack_module(ModuleInitializationLevel p_level);

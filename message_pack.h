@@ -31,13 +31,20 @@
 #ifndef MESSAGE_PACK_H
 #define MESSAGE_PACK_H
 
-#include "core/object/ref_counted.h"
+
+#ifdef GDEXTENSION
+#include <godot_cpp/templates/vector.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/builtin_types.hpp>
+
+using namespace godot;
+#else
 #include "core/string/ustring.h"
-#include "core/templates/rb_map.h"
 #include "core/templates/vector.h"
 #include "core/variant/array.h"
 #include "core/variant/dictionary.h"
 #include "core/variant/typed_array.h"
+#endif
 
 #include "mpack/mpack.h"
 
@@ -56,7 +63,7 @@ class MessagePack : public Object {
 	GDCLASS(MessagePack, Object);
 
 #if MPACK_EXTENSIONS
-	HashMap<int8_t, Callable> ext_decoder;
+	HashMap<int, Callable> ext_decoder;
 #endif
 
 	Variant data;
@@ -92,7 +99,7 @@ public:
 	Error update_stream(const PackedByteArray &p_data, int p_from = 0, int p_to = INT_MAX);
 
 #if MPACK_EXTENSIONS
-	void register_extension_type(int8_t p_ext_type, const Callable &p_decoder);
+	void register_extension_type(int p_ext_type, const Callable &p_decoder);
 #endif
 
 	inline Variant get_data() const { return data; }

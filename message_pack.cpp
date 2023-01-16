@@ -29,7 +29,14 @@
 /*************************************************************************/
 
 #include "message_pack.h"
+
+#ifdef GDEXTENSION
+#include <godot_cpp/classes/os.hpp>
+
+using namespace godot;
+#else
 #include "core/os/memory.h"
+#endif
 
 Variant MessagePack::_read_recursive(mpack_reader_t &p_reader, int p_depth) {
 	// critical check!
@@ -434,7 +441,7 @@ Array MessagePack::encode(const Variant &p_val) {
 		memcpy(msg_buf.ptrw(), buf, size);
 	}
 
-	free(buf);
+	::free(buf);
 
 	Array result;
 	result.resize(2);
@@ -490,7 +497,7 @@ void MessagePack::start_stream(int p_msgs_max) {
 
 Error MessagePack::update_stream(const PackedByteArray &p_data, int p_from, int p_to) {
 	ERR_FAIL_COND_V_MSG(p_from > p_to, ERR_INVALID_PARAMETER, "Index 'to' must be greater than 'from'.");
-	ERR_FAIL_COND_V_MSG(p_from >= p_data.size(), ERR_INVALID_PARAMETER, String("Index from ") + p_from + "out of range of data which only has " + p_data.size() + " elements.");
+	ERR_FAIL_COND_V_MSG(p_from >= p_data.size(), ERR_INVALID_PARAMETER, "Index from " + String::num_int64(p_from) + "out of range of data which only has " + String::num_int64(p_data.size()) + " elements.");
 	stream_data = p_data;
 	stream_head = p_from;
 	stream_tail = MIN(p_to, p_data.size());
@@ -499,7 +506,8 @@ Error MessagePack::update_stream(const PackedByteArray &p_data, int p_from, int 
 }
 
 #if MPACK_EXTENSIONS
-void MessagePack::register_extension_type(int8_t p_ext_type, const Callable &p_decoder) {
+void MessagePack::register_extension_type(int p_ext_type, const Callable &p_decoder) {
+	ERR_FAIL_COND_MSG(p_ext_type > 127, "Invalid extension type.");
 	ext_decoder[p_ext_type] = p_decoder;
 }
 #endif

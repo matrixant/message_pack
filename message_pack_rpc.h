@@ -31,17 +31,28 @@
 #ifndef MESSAGE_PACK_RPC_H
 #define MESSAGE_PACK_RPC_H
 
+#ifdef GDEXTENSION
+#include <godot_cpp/classes/stream_peer_tcp.hpp>
+#include <godot_cpp/classes/mutex.hpp>
+#include <godot_cpp/core/mutex_lock.hpp>
+#include <godot_cpp/templates/vector.hpp>
+#include <godot_cpp/variant/builtin_types.hpp>
+
+using namespace godot;
+#else
 #include "core/io/stream_peer_tcp.h"
 #include "core/object/ref_counted.h"
-#include "core/os/mutex.h"
-#include "core/os/thread.h"
 #include "core/string/ustring.h"
 #include "core/templates/vector.h"
 #include "core/variant/array.h"
 #include "core/variant/dictionary.h"
 #include "core/variant/typed_array.h"
+#endif
 
 #include "message_pack.h"
+
+#include <atomic>
+#include <thread>
 
 // Max message buf size: 8MiB, should be way more than enough.
 #define _MSG_BUF_MAX_SIZE (1 << 23)
@@ -54,7 +65,7 @@ class MessagePackRPC : public Object {
 	MessagePack msg_pack;
 
 	Mutex mutex;
-	Thread thread;
+	std::thread thread;
 	bool running = false;
 	bool connected = false;
 	Ref<StreamPeerTCP> tcp_stream;
@@ -81,13 +92,15 @@ class MessagePackRPC : public Object {
 	Error _message_handle(const Variant &p_message);
 	void _write_out();
 	void _read_in();
-	Error _try_connect(const IPAddress &p_ip, int p_port);
+	Error _try_connect(const String &p_ip, int p_port);
 	void _start_stream(int p_msgs_max = _MSG_MAX_SIZE);
 	Error _try_parse_stream();
-
+	
+#ifndef GDEXTENSION
 	Array _sync_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	Error _async_call(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 	Error _notify(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
+#endif
 
 	static size_t _stream_reader(mpack_tree_t *p_tree, char *r_buffer, size_t p_count);
 
@@ -107,11 +120,11 @@ public:
 	static PackedByteArray make_notification(const String &p_method, const Array &p_params = Array());
 
 	static void _thread_func(void *p_user_data);
-	Error connect_to_host(const IPAddress &p_ip, int p_port, bool p_big_endian = false);
+	Error connect_to_host(const String &p_ip, int p_port, bool p_big_endian = false);
 	Error takeover_connection(Ref<StreamPeerTCP> p_peer);
 
 #if MPACK_EXTENSIONS
-	void register_extension_type(int8_t p_ext_type, const Callable &p_decoder);
+	void register_extension_type(int p_ext_type, const Callable &p_decoder);
 #endif
 
 	Error register_request(const String &p_method, const Callable &p_callable, bool p_rewrite = false);
@@ -143,6 +156,10 @@ public:
 	~MessagePackRPC();
 };
 
+#ifdef GDEXTENSION
+VARIANT_ENUM_CAST(MessagePackRPC, MessageType);
+#else
 VARIANT_ENUM_CAST(MessagePackRPC::MessageType);
+#endif
 
 #endif // MESSAGE_PACK_RPC_H
