@@ -156,10 +156,6 @@ public:
 	~MessagePackRPC();
 };
 
-#ifdef GDEXTENSION
-VARIANT_ENUM_CAST(MessagePackRPC, MessageType);
-#else
 VARIANT_ENUM_CAST(MessagePackRPC::MessageType);
-#endif
 
 #endif // MESSAGE_PACK_RPC_H
